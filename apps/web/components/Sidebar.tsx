@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useTema } from './ThemeProvider';
+import { createClient } from '../lib/supabase';
 
 const menu = [
   {
@@ -30,7 +31,14 @@ const menu = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { tema, alternarTema } = useTema();
+
+  async function handleLogout() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/login');
+  }
 
   return (
     <aside className="w-64 bg-gray-900 min-h-screen flex flex-col">
@@ -69,14 +77,22 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div className="p-4 border-t border-gray-700 space-y-3">
+      <div className="p-4 border-t border-gray-700 space-y-2">
         <button
           onClick={alternarTema}
           className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-400 hover:bg-gray-800 hover:text-white transition"
         >
           {tema === 'claro' ? '🌙 Modo Escuro' : '☀️ Modo Claro'}
         </button>
-        <p className="text-gray-500 text-xs text-center">v0.1.0 · Sistema Faturar</p>
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm text-red-400 hover:bg-red-900 hover:text-red-200 transition"
+        >
+          🚪 Sair
+        </button>
+        <p className="text-gray-500 text-xs text-center pt-1">
+          v0.1.0 · Sistema Faturar
+        </p>
       </div>
     </aside>
   );
