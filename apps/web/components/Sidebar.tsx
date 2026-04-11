@@ -6,13 +6,14 @@ import { useTema } from './ThemeProvider';
 import { createClient } from '../lib/supabase';
 
 const menu = [
-  {
-    grupo: 'Geral',
-    itens: [
-      { label: 'Início', href: '/', icon: '🏠' },
-      { label: 'Unidades', href: '/unidades', icon: '🏢' },
-    ],
-  },
+    {
+      grupo: 'Geral',
+      itens: [
+        { label: 'Início', href: '/', icon: '🏠' },
+        { label: 'Unidades', href: '/unidades', icon: '🏢' },
+        { label: 'Usuários', href: '/usuarios', icon: '👥' },
+      ],
+    },
   {
     grupo: 'Documental',
     itens: [
