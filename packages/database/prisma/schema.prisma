@@ -149,6 +149,7 @@ model TipoDocumento {
 
   documentos          Documento[]
 
+  @@unique([nome])
   @@map("tipos_documento")
 }
 
