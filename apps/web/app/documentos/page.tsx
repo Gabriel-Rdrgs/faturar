@@ -255,7 +255,8 @@ export default function DocumentosPage() {
                 return (
                   <tr
                     key={doc.id}
-                    className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                    onClick={() => window.location.href = `/documentos/${doc.id}`}
+                    className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition cursor-pointer"
                   >
                     <td className="px-5 py-4">
                       <p className="font-medium text-gray-900 dark:text-white">
