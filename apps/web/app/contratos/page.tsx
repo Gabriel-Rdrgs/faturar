@@ -210,43 +210,51 @@ export default function ContratosPage() {
               {contratos.map((contrato) => {
                 const sc = statusConfig[contrato.status] ?? statusConfig['ENCERRADO'];
                 return (
-                  <tr key={contrato.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                  <tr
+                    key={contrato.id}
+                    onClick={() => window.location.href = `/contratos/${contrato.id}`}
+                    className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition cursor-pointer"
+                    >
                     <td className="px-5 py-4">
-                      <p className="font-medium text-gray-900 dark:text-white">{contrato.nome}</p>
-                      {contrato.orgaoContratante && (
+                        <p className="font-medium text-gray-900 dark:text-white">{contrato.nome}</p>
+                        {contrato.orgaoContratante && (
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{contrato.orgaoContratante}</p>
-                      )}
+                        )}
                     </td>
                     <td className="px-5 py-4 text-gray-700 dark:text-gray-300">{contrato.unidade.nome}</td>
                     <td className="px-5 py-4 text-gray-700 dark:text-gray-300">{tipoLabel[contrato.tipo] ?? contrato.tipo}</td>
                     <td className="px-5 py-4 text-gray-700 dark:text-gray-300">{formatarData(contrato.dataInicio)}</td>
                     <td className="px-5 py-4 text-gray-700 dark:text-gray-300">{formatarData(contrato.dataFim)}</td>
                     <td className="px-5 py-4">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${sc.cor}`}>
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${sc.cor}`}>
                         {sc.label}
-                      </span>
+                        </span>
                     </td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
+                    <td className="px-5 py-4" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-3">
                         <button
-                          onClick={() => abrirModalEditar(contrato)}
-                          className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                            onClick={(e) => {
+                            e.stopPropagation();
+                            abrirModalEditar(contrato);
+                            }}
+                            className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
                         >
-                          ✏️ Editar
+                            ✏️ Editar
                         </button>
                         <button
-                          onClick={() => {
+                            onClick={(e) => {
+                            e.stopPropagation();
                             setContratoExcluindo(contrato);
                             setConfirmacaoNome('');
                             setErroExcluir('');
-                          }}
-                          className="text-sm text-red-500 dark:text-red-400 hover:underline"
+                            }}
+                            className="text-sm text-red-500 dark:text-red-400 hover:underline"
                         >
-                          🗑️ Excluir
+                            🗑️ Excluir
                         </button>
-                      </div>
+                        </div>
                     </td>
-                  </tr>
+                </tr>
                 );
               })}
             </tbody>
