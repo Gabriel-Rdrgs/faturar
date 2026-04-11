@@ -9,7 +9,7 @@ datasource db {
 }
 
 // -------------------------
-// NÚCLEO DO SISTEMA
+// ENUMS
 // -------------------------
 
 enum TipoUnidade {
@@ -27,6 +27,48 @@ enum PapelUsuario {
   OPERACIONAL_UNIDADE
 }
 
+enum TipoContrato {
+  EDITAL
+  CREDENCIAMENTO
+  CONTRATO
+  CONVENIO
+  LOCACAO
+}
+
+enum StatusContrato {
+  EM_HABILITACAO
+  ATIVO
+  SUSPENSO
+  ENCERRADO
+}
+
+enum CategoriaDocumento {
+  FISCAL
+  TRABALHISTA
+  TECNICA
+  SANITARIA
+  JURIDICA
+  DECLARACAO
+  OUTROS
+}
+
+enum StatusDocumento {
+  SEM_DATA
+  VALIDO
+  ATENCAO
+  VENCIDO
+}
+
+enum TipoAlerta {
+  VENCIMENTO_PROXIMO
+  VENCIDO
+  RENOVADO
+}
+
+// -------------------------
+// NÚCLEO
+// -------------------------
+
 model Unidade {
   id           String      @id @default(uuid())
   nome         String
@@ -38,6 +80,8 @@ model Unidade {
   atualizadoEm DateTime    @updatedAt
 
   usuarios     Usuario[]
+  contratos    Contrato[]
+  documentos   Documento[]
 
   @@map("unidades")
 }
@@ -55,5 +99,121 @@ model Usuario {
   unidadeId    String?
   unidade      Unidade?     @relation(fields: [unidadeId], references: [id])
 
+  documentosCriados      Documento[]        @relation("DocumentoCriadoPor")
+  documentosAtualizados  Documento[]        @relation("DocumentoAtualizadoPor")
+  arquivosUpados         DocumentoArquivo[]
+  alertasRecebidos       AlertaDocumento[]
+
   @@map("usuarios")
+}
+
+// -------------------------
+// CONTRATOS
+// -------------------------
+
+model Contrato {
+  id               String         @id @default(uuid())
+  nome             String
+  tipo             TipoContrato
+  orgaoContratante String?
+  dataInicio       DateTime?
+  dataFim          DateTime?
+  status           StatusContrato @default(EM_HABILITACAO)
+  observacoes      String?
+  criadoEm         DateTime       @default(now())
+  atualizadoEm     DateTime       @updatedAt
+
+  unidadeId        String
+  unidade          Unidade        @relation(fields: [unidadeId], references: [id])
+
+  documentos       Documento[]
+
+  @@map("contratos")
+}
+
+// -------------------------
+// DOC PRAZO
+// -------------------------
+
+model TipoDocumento {
+  id                  String             @id @default(uuid())
+  nome                String
+  orgaoEmissor        String?
+  validadePadraoDias  Int?
+  limiteAtencaoDias   Int?
+  urlEmissao          String?
+  categoria           CategoriaDocumento
+  observacoes         String?
+  criadoEm            DateTime           @default(now())
+  atualizadoEm        DateTime           @updatedAt
+
+  documentos          Documento[]
+
+  @@map("tipos_documento")
+}
+
+model Documento {
+  id                      String          @id @default(uuid())
+  dataEmissao             DateTime?
+  validadeDias            Int?
+  dataVencimento          DateTime?
+  diasRestantes           Int?
+  status                  StatusDocumento @default(SEM_DATA)
+  observacoes             String?
+  criadoEm                DateTime        @default(now())
+  atualizadoEm            DateTime        @updatedAt
+
+  unidadeId               String
+  unidade                 Unidade         @relation(fields: [unidadeId], references: [id])
+
+  contratoId              String?
+  contrato                Contrato?       @relation(fields: [contratoId], references: [id])
+
+  tipoDocumentoId         String
+  tipoDocumento           TipoDocumento   @relation(fields: [tipoDocumentoId], references: [id])
+
+  criadoPorId             String?
+  criadoPor               Usuario?        @relation("DocumentoCriadoPor", fields: [criadoPorId], references: [id])
+
+  atualizadoPorId         String?
+  atualizadoPor           Usuario?        @relation("DocumentoAtualizadoPor", fields: [atualizadoPorId], references: [id])
+
+  arquivos                DocumentoArquivo[]
+  alertas                 AlertaDocumento[]
+
+  @@map("documentos")
+}
+
+model DocumentoArquivo {
+  id           String   @id @default(uuid())
+  versao       Int
+  arquivoUrl   String
+  motivoUpload String?
+  observacoes  String?
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+
+  documentoId  String
+  documento    Documento @relation(fields: [documentoId], references: [id])
+
+  usuarioId    String?
+  usuario      Usuario?  @relation(fields: [usuarioId], references: [id])
+
+  @@map("documentos_arquivos")
+}
+
+model AlertaDocumento {
+  id           String     @id @default(uuid())
+  tipoAlerta   TipoAlerta
+  lido         Boolean    @default(false)
+  dataLeitura  DateTime?
+  criadoEm     DateTime   @default(now())
+
+  documentoId  String
+  documento    Documento  @relation(fields: [documentoId], references: [id])
+
+  destinatarioId String?
+  destinatario   Usuario? @relation(fields: [destinatarioId], references: [id])
+
+  @@map("alertas_documentos")
 }
