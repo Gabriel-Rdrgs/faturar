@@ -23,13 +23,14 @@ export async function middleware(request: NextRequest) {
 
   const { data: { session } } = await supabase.auth.getSession();
 
-  const isLoginPage = request.nextUrl.pathname === '/login';
+  const pathname = request.nextUrl.pathname;
+  const isPublica = pathname === '/login' || pathname.startsWith('/auth/');
 
-  if (!session && !isLoginPage) {
+  if (!session && !isPublica) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  if (session && isLoginPage) {
+  if (session && pathname === '/login') {
     return NextResponse.redirect(new URL('/', request.url));
   }
 

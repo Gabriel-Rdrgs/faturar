@@ -111,13 +111,15 @@ export default function UsuariosPage() {
       }
       setModalAberto(false);
       carregarUsuarios();
-    } catch {
-      setErro('Erro ao salvar. Verifique os dados e tente novamente.');
-    } finally {
-      setSalvando(false);
+    } 
+    catch (error: any) {
+        console.error('Erro ao criar usuário:', error);
+        setErro(error?.response?.data?.message ?? 'Erro ao salvar. Verifique os dados e tente novamente.');
+    } 
+    finally {
+            setSalvando(false);
     }
   }
-
   async function handleExcluir() {
     if (!usuarioExcluindo) return;
     if (confirmacaoNome !== usuarioExcluindo.nome) {
