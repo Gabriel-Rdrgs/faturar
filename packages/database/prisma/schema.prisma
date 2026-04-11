@@ -1,0 +1,59 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// -------------------------
+// NÚCLEO DO SISTEMA
+// -------------------------
+
+enum TipoUnidade {
+  CLINICA
+  LABORATORIO
+  PREDIO
+  FACULDADE
+  EMPRESA
+}
+
+enum PapelUsuario {
+  ADMIN_GLOBAL
+  GESTOR_GLOBAL
+  GESTOR_UNIDADE
+  OPERACIONAL_UNIDADE
+}
+
+model Unidade {
+  id           String      @id @default(uuid())
+  nome         String
+  tipo         TipoUnidade
+  cnpj         String?     @unique
+  ativo        Boolean     @default(true)
+  observacoes  String?
+  criadoEm     DateTime    @default(now())
+  atualizadoEm DateTime    @updatedAt
+
+  usuarios     Usuario[]
+
+  @@map("unidades")
+}
+
+model Usuario {
+  id           String       @id @default(uuid())
+  nome         String
+  email        String       @unique
+  senhaHash    String
+  papel        PapelUsuario
+  ativo        Boolean      @default(true)
+  criadoEm     DateTime     @default(now())
+  atualizadoEm DateTime     @updatedAt
+
+  unidadeId    String?
+  unidade      Unidade?     @relation(fields: [unidadeId], references: [id])
+
+  @@map("usuarios")
+}
