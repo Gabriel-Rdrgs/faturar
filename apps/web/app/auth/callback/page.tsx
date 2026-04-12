@@ -16,23 +16,27 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     const supabase = createClient();
 
-    // Processa o token da URL
-    supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
-        if (session) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+          setPronto(true);
+          setCarregando(false);
+        } else if (event === 'PASSWORD_RECOVERY' && session) {
           setPronto(true);
           setCarregando(false);
         }
       }
-    });
+    );
 
-    // Verifica sessão existente
+    // Também tenta pegar sessão existente
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) {
         setPronto(true);
       }
       setCarregando(false);
     });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   async function handleDefinirSenha(e: React.FormEvent) {
@@ -64,7 +68,10 @@ export default function AuthCallbackPage() {
   if (carregando) {
     return (
       <div className="min-h-screen bg-gray-100 dark:bg-gray-950 flex items-center justify-center">
-        <p className="text-gray-500 dark:text-gray-400">Verificando acesso...</p>
+        <div className="text-center">
+          <span className="text-4xl animate-spin inline-block mb-4">⏳</span>
+          <p className="text-gray-500 dark:text-gray-400">Verificando acesso...</p>
+        </div>
       </div>
     );
   }
