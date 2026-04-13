@@ -16,31 +16,56 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     const supabase = createClient();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === 'SIGNED_IN' && session) {
-          setPronto(true);
-          setCarregando(false);
-        } else if (event === 'PASSWORD_RECOVERY' && session) {
-          setPronto(true);
-          setCarregando(false);
-        }
-      }
-    );
+    async function processarToken() {
+      // Lê o hash da URL (#access_token=...&refresh_token=...&type=recovery)
+      const hash = window.location.hash.substring(1); // remove o '#'
+      const params = new URLSearchParams(hash);
 
-    // Também tenta pegar sessão existente
-    supabase.auth.getSession().then(({ data }) => {
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+      const type = params.get('type');
+      const error = params.get('error');
+
+      // Se veio com erro explícito na URL (ex: otp_expired)
+      if (error) {
+        setCarregando(false);
+        return;
+      }
+
+      // Se veio com os tokens de recovery
+      if (accessToken && refreshToken && type === 'recovery') {
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+
+        if (sessionError) {
+          console.error('Erro ao estabelecer sessão:', sessionError.message);
+          setCarregando(false);
+          return;
+        }
+
+        // Sessão estabelecida com sucesso
+        setPronto(true);
+        setCarregando(false);
+        return;
+      }
+
+      // Se não tem hash com tokens, verifica se já tem sessão ativa
+      // (caso o usuário já esteja logado e acesse a página diretamente)
+      const { data } = await supabase.auth.getSession();
       if (data.session) {
         setPronto(true);
       }
       setCarregando(false);
-    });
+    }
 
-    return () => subscription.unsubscribe();
+    processarToken();
   }, []);
 
   async function handleDefinirSenha(e: React.FormEvent) {
     e.preventDefault();
+
     if (senha !== confirmaSenha) {
       setErro('As senhas não conferem.');
       return;
@@ -85,7 +110,8 @@ export default function AuthCallbackPage() {
             Link inválido ou expirado
           </h2>
           <p className="text-gray-500 dark:text-gray-400 text-sm mb-6">
-            O link de convite expirou. Peça ao administrador para reenviar o convite.
+            O link de acesso expirou ou já foi utilizado. Peça ao administrador
+            para gerar um novo link na página de usuários.
           </p>
           <button
             onClick={() => router.push('/login')}

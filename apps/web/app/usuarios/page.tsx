@@ -58,6 +58,14 @@ export default function UsuariosPage() {
   const [excluindo, setExcluindo] = useState(false);
   const [erroExcluir, setErroExcluir] = useState('');
 
+  // Modal link de acesso
+  const [linkModal, setLinkModal] = useState<{ aberto: boolean; link: string }>({
+    aberto: false,
+    link: '',
+  });
+  const [linkCopiado, setLinkCopiado] = useState(false);
+  const [reenviando, setReenviando] = useState<string | null>(null);
+
   function carregarUsuarios() {
     setCarregando(true);
     api
@@ -92,6 +100,25 @@ export default function UsuariosPage() {
     setModalAberto(true);
   }
 
+  function copiarLink() {
+    navigator.clipboard.writeText(linkModal.link).then(() => {
+      setLinkCopiado(true);
+      setTimeout(() => setLinkCopiado(false), 2500);
+    });
+  }
+
+  async function handleReenviarConvite(id: string) {
+    setReenviando(id);
+    try {
+      const res = await api.post(`/usuarios/${id}/reenviar-convite`);
+      setLinkModal({ aberto: true, link: res.data.linkAcesso });
+    } catch {
+      alert('Erro ao gerar link de acesso. Tente novamente.');
+    } finally {
+      setReenviando(null);
+    }
+  }
+
   async function handleSalvar(e: React.FormEvent) {
     e.preventDefault();
     setSalvando(true);
@@ -104,22 +131,28 @@ export default function UsuariosPage() {
         unidadeId: form.unidadeId || undefined,
         ativo: form.ativo,
       };
+
       if (usuarioEditando) {
         await api.put(`/usuarios/${usuarioEditando.id}`, dados);
+        setModalAberto(false);
       } else {
-        await api.post('/usuarios', dados);
+        // Criação: captura o linkAcesso retornado pela API
+        const res = await api.post('/usuarios', dados);
+        setModalAberto(false);
+        setLinkModal({ aberto: true, link: res.data.linkAcesso });
       }
-      setModalAberto(false);
+
       carregarUsuarios();
-    } 
-    catch (error: any) {
-        console.error('Erro ao criar usuário:', error);
-        setErro(error?.response?.data?.message ?? 'Erro ao salvar. Verifique os dados e tente novamente.');
-    } 
-    finally {
-            setSalvando(false);
+    } catch (error: any) {
+      setErro(
+        error?.response?.data?.message ??
+          'Erro ao salvar. Verifique os dados e tente novamente.',
+      );
+    } finally {
+      setSalvando(false);
     }
   }
+
   async function handleExcluir() {
     if (!usuarioExcluindo) return;
     if (confirmacaoNome !== usuarioExcluindo.nome) {
@@ -139,7 +172,8 @@ export default function UsuariosPage() {
     }
   }
 
-  const precisaUnidade = form.papel === 'GESTOR_UNIDADE' || form.papel === 'OPERACIONAL_UNIDADE';
+  const precisaUnidade =
+    form.papel === 'GESTOR_UNIDADE' || form.papel === 'OPERACIONAL_UNIDADE';
 
   return (
     <div>
@@ -183,25 +217,36 @@ export default function UsuariosPage() {
             </thead>
             <tbody>
               {usuarios.map((usuario) => (
-                <tr key={usuario.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                <tr
+                  key={usuario.id}
+                  className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                >
                   <td className="px-5 py-4">
                     <p className="font-medium text-gray-900 dark:text-white">{usuario.nome}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{usuario.email}</p>
                   </td>
                   <td className="px-5 py-4">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${papelCor[usuario.papel] ?? papelCor['OPERACIONAL_UNIDADE']}`}>
+                    <span
+                      className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+                        papelCor[usuario.papel] ?? papelCor['OPERACIONAL_UNIDADE']
+                      }`}
+                    >
                       {papelLabel[usuario.papel] ?? usuario.papel}
                     </span>
                   </td>
                   <td className="px-5 py-4 text-gray-700 dark:text-gray-300">
-                    {usuario.unidade?.nome ?? <span className="text-gray-400">Global</span>}
+                    {usuario.unidade?.nome ?? (
+                      <span className="text-gray-400">Global</span>
+                    )}
                   </td>
                   <td className="px-5 py-4">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                      usuario.ativo
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                        : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
-                    }`}>
+                    <span
+                      className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+                        usuario.ativo
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                          : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                      }`}
+                    >
                       {usuario.ativo ? 'Ativo' : 'Inativo'}
                     </span>
                   </td>
@@ -212,6 +257,13 @@ export default function UsuariosPage() {
                         className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
                       >
                         ✏️ Editar
+                      </button>
+                      <button
+                        onClick={() => handleReenviarConvite(usuario.id)}
+                        disabled={reenviando === usuario.id}
+                        className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline disabled:opacity-50"
+                      >
+                        {reenviando === usuario.id ? '⏳' : '🔗'} Link de Acesso
                       </button>
                       <button
                         onClick={() => {
@@ -232,6 +284,64 @@ export default function UsuariosPage() {
         </div>
       )}
 
+      {/* Modal Link de Acesso */}
+      {linkModal.aberto && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-lg">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                🔗 Link de Acesso
+              </h2>
+              <button
+                onClick={() => setLinkModal({ aberto: false, link: '' })}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <p className="text-sm text-blue-700 dark:text-blue-300">
+                  Copie o link abaixo e envie para o usuário por e-mail, WhatsApp ou outro canal.
+                  Ao clicar, ele será direcionado para definir sua senha de acesso.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={linkModal.link}
+                  className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs focus:outline-none"
+                />
+                                <button
+                  onClick={copiarLink}
+                  className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition whitespace-nowrap"
+                >
+                  {linkCopiado ? '✅ Copiado!' : 'Copiar'}
+                </button>
+              </div>
+
+              <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                  ⚠️ Este link expira em 24 horas. Se o usuário não acessar a tempo, use o botão
+                  <strong> 🔗 Link de Acesso</strong> na tabela para gerar um novo link.
+                </p>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  onClick={() => setLinkModal({ aberto: false, link: '' })}
+                  className="px-4 py-2.5 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium transition"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal Criar/Editar */}
       {modalAberto && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -240,7 +350,12 @@ export default function UsuariosPage() {
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                 {usuarioEditando ? 'Editar Usuário' : 'Novo Usuário'}
               </h2>
-              <button onClick={() => setModalAberto(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition">✕</button>
+              <button
+                onClick={() => setModalAberto(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition"
+              >
+                ✕
+              </button>
             </div>
             <form onSubmit={handleSalvar} className="p-6 space-y-4">
               <div>
@@ -329,7 +444,8 @@ export default function UsuariosPage() {
               {!usuarioEditando && (
                 <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                   <p className="text-xs text-blue-700 dark:text-blue-300">
-                    A senha inicial será <strong>Faturar@2026</strong>. O usuário deverá alterá-la no primeiro acesso.
+                    Após salvar, um <strong>link de acesso</strong> será gerado para você enviar
+                    ao usuário. Ele usará esse link para definir sua própria senha.
                   </p>
                 </div>
               )}
@@ -398,7 +514,9 @@ export default function UsuariosPage() {
                   placeholder="Digite o nome exato"
                 />
               </div>
-              {erroExcluir && <p className="text-red-500 text-sm">{erroExcluir}</p>}
+              {erroExcluir && (
+                <p className="text-red-500 text-sm">{erroExcluir}</p>
+              )}
               <div className="flex gap-3 pt-2">
                 <button
                   onClick={() => setUsuarioExcluindo(null)}

@@ -122,27 +122,29 @@ export default function UnidadesPage() {
     }
   }
 
-  async function handleExcluir() {
-    if (!unidadeExcluindo) return;
+async function handleExcluir() {
+  if (!unidadeExcluindo) return;
 
-    if (confirmacaoNome !== unidadeExcluindo.nome) {
-      setErroExcluir('O nome digitado não confere. Tente novamente.');
-      return;
-    }
-
-    setExcluindo(true);
-    setErroExcluir('');
-
-    try {
-      await api.delete(`/unidades/${unidadeExcluindo.id}`);
-      setModalExcluirAberto(false);
-      carregarUnidades();
-    } catch {
-      setErroExcluir('Erro ao excluir. A unidade pode ter dados vinculados.');
-    } finally {
-      setExcluindo(false);
-    }
+  if (confirmacaoNome !== unidadeExcluindo.nome) {
+    setErroExcluir('O nome digitado não confere. Tente novamente.');
+    return;
   }
+
+  setExcluindo(true);
+  setErroExcluir('');
+
+  try {
+    await api.delete(`/unidades/${unidadeExcluindo.id}`);
+    setModalExcluirAberto(false);
+    carregarUnidades();
+  } catch (error: any) {
+    setErroExcluir(
+      error?.response?.data?.message ?? 'Erro ao excluir. Tente novamente.',
+    );
+  } finally {
+    setExcluindo(false);
+  }
+}
 
   return (
     <div>

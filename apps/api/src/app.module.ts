@@ -12,6 +12,10 @@ import { AlertasDocumentoModule } from './alertas-documento/alertas-documento.mo
 import { AuthModule } from './auth/auth.module';
 import { SupabaseGuard } from './auth/supabase.guard';
 import { UsuariosModule } from './usuarios/usuarios.module';
+import { ModelosChecklistModule } from './modelos-checklist/modelos-checklist.module';
+import { ItensModeloChecklistModule } from './itens-modelo-checklist/itens-modelo-checklist.module';
+import { ChecklistsUnidadeModule } from './checklists-unidade/checklists-unidade.module';
+import { ItensChecklistModule } from './itens-checklist/itens-checklist.module';
 
 @Module({
   imports: [
@@ -26,6 +30,10 @@ import { UsuariosModule } from './usuarios/usuarios.module';
     DocumentosModule,
     AlertasDocumentoModule,
     UsuariosModule,
+    ModelosChecklistModule,
+    ItensModeloChecklistModule,
+    ChecklistsUnidadeModule,
+    ItensChecklistModule,
   ],
   providers: [
     {

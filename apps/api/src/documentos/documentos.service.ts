@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CriarDocumentoDto } from './dto/criar-documento.dto';
 import { AnexarArquivoDto } from './dto/anexar-arquivo.dto';
@@ -11,7 +11,7 @@ export class DocumentosService {
     private readonly alertas: AlertasDocumentoService,
   ) {}
 
-  private calcularStatus(dataVencimento: Date | null, limiteAtencaoDias: number = 30): string {
+  private calcularStatus(dataVencimento: Date | null, limiteAtencaoDias = 30): string {
     if (!dataVencimento) return 'SEM_DATA';
     const hoje = new Date();
     const diasRestantes = Math.ceil(
@@ -28,16 +28,38 @@ export class DocumentosService {
     return vencimento;
   }
 
+  // Recalcula se um DocumentoContrato satisfaz as exigências do contrato
+  private calcularSatisfaz(
+    dataEmissao: Date | null,
+    emissaoMaximaDias: number | null,
+  ): boolean {
+    if (!emissaoMaximaDias) return true;
+    if (!dataEmissao) return false;
+    const hoje = new Date();
+    const diasDesdeEmissao = Math.ceil(
+      (hoje.getTime() - dataEmissao.getTime()) / (1000 * 60 * 60 * 24),
+    );
+    return diasDesdeEmissao <= emissaoMaximaDias;
+  }
+
   async listar(unidadeId?: string, contratoId?: string, status?: string) {
     return this.prisma.documento.findMany({
       where: {
         ...(unidadeId && { unidadeId }),
-        ...(contratoId && { contratoId }),
+        // Filtro por contrato agora usa a relação N:N
+        ...(contratoId && {
+          contratos: { some: { contratoId } },
+        }),
         ...(status && { status: status as any }),
       },
       include: {
         unidade: { select: { id: true, nome: true } },
-        contrato: { select: { id: true, nome: true } },
+        // Retorna os contratos vinculados com dados básicos
+        contratos: {
+          include: {
+            contrato: { select: { id: true, nome: true } },
+          },
+        },
         tipoDocumento: true,
       },
       orderBy: { dataVencimento: 'asc' },
@@ -49,7 +71,11 @@ export class DocumentosService {
       where: { id },
       include: {
         unidade: { select: { id: true, nome: true } },
-        contrato: { select: { id: true, nome: true } },
+        contratos: {
+          include: {
+            contrato: { select: { id: true, nome: true, tipo: true, status: true } },
+          },
+        },
         tipoDocumento: true,
         arquivos: { orderBy: { versao: 'desc' } },
         alertas: { orderBy: { criadoEm: 'desc' } },
@@ -71,12 +97,18 @@ export class DocumentosService {
     const limiteAtencao = tipoDocumento?.limiteAtencaoDias ?? 30;
     const status = this.calcularStatus(dataVencimento, limiteAtencao);
     const diasRestantes = dataVencimento
-      ? Math.ceil((dataVencimento.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+      ? Math.ceil(
+          (dataVencimento.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24),
+        )
       : null;
+
+    // Extrai contratoId do dto se vier (para manter compatibilidade com o frontend atual)
+    // mas não passa para o Prisma, pois o campo não existe mais no modelo Documento
+    const { contratoId, ...dadosDocumento } = dto as any;
 
     const documento = await this.prisma.documento.create({
       data: {
-        ...dto,
+        ...dadosDocumento,
         dataEmissao: dataEmissaoDate,
         validadeDias,
         dataVencimento,
@@ -84,6 +116,17 @@ export class DocumentosService {
         status: status as any,
       },
     });
+
+    // Se veio contratoId no dto, já vincula automaticamente
+    if (contratoId) {
+      await this.prisma.documentoContrato.create({
+        data: {
+          documentoId: documento.id,
+          contratoId,
+          satisfaz: this.calcularSatisfaz(dataEmissaoDate, null),
+        },
+      });
+    }
 
     await this.alertas.verificarDocumento(documento.id);
     return documento;
@@ -95,7 +138,7 @@ export class DocumentosService {
       include: { tipoDocumento: true },
     });
 
-    if (!documentoAtual) throw new Error('Documento não encontrado');
+    if (!documentoAtual) throw new NotFoundException('Documento não encontrado');
 
     const dataEmissaoDate = dto.dataEmissao
       ? new Date(dto.dataEmissao)
@@ -115,13 +158,18 @@ export class DocumentosService {
     const limiteAtencao = documentoAtual.tipoDocumento?.limiteAtencaoDias ?? 30;
     const status = this.calcularStatus(dataVencimento, limiteAtencao);
     const diasRestantes = dataVencimento
-      ? Math.ceil((dataVencimento.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+      ? Math.ceil(
+          (dataVencimento.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24),
+        )
       : null;
+
+    // Remove contratoId do dto para não passar ao Prisma
+    const { contratoId, ...dadosDocumento } = dto as any;
 
     const documentoAtualizado = await this.prisma.documento.update({
       where: { id },
       data: {
-        ...dto,
+        ...dadosDocumento,
         dataEmissao: dataEmissaoDate,
         validadeDias,
         dataVencimento,
@@ -130,12 +178,101 @@ export class DocumentosService {
       },
     });
 
+    // Recalcula satisfaz em todos os vínculos deste documento
+    await this.recalcularSatisfazPorDocumento(id, dataEmissaoDate);
+
     await this.alertas.verificarDocumento(id);
     return documentoAtualizado;
   }
 
   async excluir(id: string) {
+    // Remove vínculos antes de excluir o documento
+    await this.prisma.documentoContrato.deleteMany({ where: { documentoId: id } });
     return this.prisma.documento.delete({ where: { id } });
+  }
+
+  // Vincula um documento a um contrato
+  async vincularContrato(
+    documentoId: string,
+    contratoId: string,
+    emissaoMaximaDias?: number,
+    observacoes?: string,
+  ) {
+    const documento = await this.prisma.documento.findUnique({
+      where: { id: documentoId },
+    });
+    if (!documento) throw new NotFoundException('Documento não encontrado');
+
+    const contrato = await this.prisma.contrato.findUnique({
+      where: { id: contratoId },
+    });
+    if (!contrato) throw new NotFoundException('Contrato não encontrado');
+
+    const jaVinculado = await this.prisma.documentoContrato.findUnique({
+      where: { documentoId_contratoId: { documentoId, contratoId } },
+    });
+    if (jaVinculado) throw new BadRequestException('Documento já está vinculado a este contrato');
+
+    const satisfaz = this.calcularSatisfaz(
+      documento.dataEmissao,
+      emissaoMaximaDias ?? null,
+    );
+
+    return this.prisma.documentoContrato.create({
+      data: {
+        documentoId,
+        contratoId,
+        emissaoMaximaDias: emissaoMaximaDias ?? null,
+        observacoes: observacoes ?? null,
+        satisfaz,
+      },
+      include: {
+        contrato: { select: { id: true, nome: true } },
+      },
+    });
+  }
+
+  // Desvincula um documento de um contrato
+  async desvincularContrato(documentoId: string, contratoId: string) {
+    const vinculo = await this.prisma.documentoContrato.findUnique({
+      where: { documentoId_contratoId: { documentoId, contratoId } },
+    });
+    if (!vinculo) throw new NotFoundException('Vínculo não encontrado');
+
+    return this.prisma.documentoContrato.delete({
+      where: { documentoId_contratoId: { documentoId, contratoId } },
+    });
+  }
+
+  // Lista contratos vinculados a um documento
+  async listarContratos(documentoId: string) {
+    return this.prisma.documentoContrato.findMany({
+      where: { documentoId },
+      include: {
+        contrato: {
+          select: { id: true, nome: true, tipo: true, status: true, orgaoContratante: true },
+        },
+      },
+      orderBy: { criadoEm: 'asc' },
+    });
+  }
+
+  // Recalcula o campo satisfaz de todos os vínculos de um documento
+  private async recalcularSatisfazPorDocumento(
+    documentoId: string,
+    dataEmissao: Date | null,
+  ) {
+    const vinculos = await this.prisma.documentoContrato.findMany({
+      where: { documentoId },
+    });
+
+    for (const vinculo of vinculos) {
+      const satisfaz = this.calcularSatisfaz(dataEmissao, vinculo.emissaoMaximaDias);
+      await this.prisma.documentoContrato.update({
+        where: { id: vinculo.id },
+        data: { satisfaz },
+      });
+    }
   }
 
   async anexarArquivo(documentoId: string, dto: AnexarArquivoDto) {
@@ -170,20 +307,24 @@ export class DocumentosService {
       include: { tipoDocumento: true },
     });
 
-    const validadeDias = dto.validadeDias ?? documento?.tipoDocumento?.validadePadraoDias ?? null;
+    const validadeDias =
+      dto.validadeDias ?? documento?.tipoDocumento?.validadePadraoDias ?? null;
+    const dataEmissaoDate = new Date(dto.dataEmissao);
     const dataVencimento = validadeDias
-      ? this.calcularVencimento(new Date(dto.dataEmissao), validadeDias)
+      ? this.calcularVencimento(dataEmissaoDate, validadeDias)
       : null;
     const limiteAtencao = documento?.tipoDocumento?.limiteAtencaoDias ?? 30;
     const status = this.calcularStatus(dataVencimento, limiteAtencao);
     const diasRestantes = dataVencimento
-      ? Math.ceil((dataVencimento.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+      ? Math.ceil(
+          (dataVencimento.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24),
+        )
       : null;
 
     const documentoFinal = await this.prisma.documento.update({
       where: { id: documentoId },
       data: {
-        dataEmissao: new Date(dto.dataEmissao),
+        dataEmissao: dataEmissaoDate,
         validadeDias,
         dataVencimento,
         diasRestantes,
@@ -192,10 +333,18 @@ export class DocumentosService {
       include: {
         arquivos: { orderBy: { versao: 'desc' } },
         tipoDocumento: true,
+        contratos: {
+          include: {
+            contrato: { select: { id: true, nome: true } },
+          },
+        },
       },
     });
 
+    // Recalcula satisfaz nos vínculos após novo arquivo
+    await this.recalcularSatisfazPorDocumento(documentoId, dataEmissaoDate);
     await this.alertas.verificarDocumento(documentoId);
+
     return documentoFinal;
   }
 
@@ -204,10 +353,11 @@ export class DocumentosService {
       where: { id: arquivoId },
     });
 
-    if (!arquivo) throw new Error('Arquivo não encontrado');
-    if (arquivo.documentoId !== documentoId) throw new Error('Arquivo não pertence a este documento');
+    if (!arquivo) throw new NotFoundException('Arquivo não encontrado');
+    if (arquivo.documentoId !== documentoId)
+      throw new BadRequestException('Arquivo não pertence a este documento');
 
-    await this.prisma.documentoArquivo.delete({ where: { id: arquivoId } });
+        await this.prisma.documentoArquivo.delete({ where: { id: arquivoId } });
 
     if (arquivo.ativo) {
       const maisRecente = await this.prisma.documentoArquivo.findFirst({

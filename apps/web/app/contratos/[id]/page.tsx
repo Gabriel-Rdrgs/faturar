@@ -4,6 +4,25 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import api from '../../../lib/api';
 
+interface DocumentoVinculo {
+  id: string;
+  emissaoMaximaDias: number | null;
+  satisfaz: boolean;
+  documento: {
+    id: string;
+    status: string;
+    dataEmissao: string | null;
+    dataVencimento: string | null;
+    diasRestantes: number | null;
+    tipoDocumento: {
+      nome: string;
+      categoria: string;
+      orgaoEmissor: string | null;
+    };
+    unidade: { id: string; nome: string };
+  };
+}
+
 interface Contrato {
   id: string;
   nome: string;
@@ -14,19 +33,7 @@ interface Contrato {
   dataFim: string | null;
   observacoes: string | null;
   unidade: { id: string; nome: string };
-}
-
-interface Documento {
-  id: string;
-  status: string;
-  dataEmissao: string | null;
-  dataVencimento: string | null;
-  diasRestantes: number | null;
-  tipoDocumento: {
-    nome: string;
-    categoria: string;
-    orgaoEmissor: string | null;
-  };
+  documentos: DocumentoVinculo[];
 }
 
 const statusContratoConfig: Record<string, { label: string; cor: string }> = {
@@ -60,19 +67,13 @@ export default function ContratoDetalhePage() {
   const { id } = useParams();
   const router = useRouter();
   const [contrato, setContrato] = useState<Contrato | null>(null);
-  const [documentos, setDocumentos] = useState<Documento[]>([]);
   const [carregando, setCarregando] = useState(true);
 
   useEffect(() => {
     if (!id) return;
-    Promise.all([
-      api.get(`/contratos/${id}`),
-      api.get(`/documentos?contratoId=${id}`),
-    ])
-      .then(([resContrato, resDocs]) => {
-        setContrato(resContrato.data);
-        setDocumentos(Array.isArray(resDocs.data) ? resDocs.data : []);
-      })
+    api
+      .get(`/contratos/${id}`)
+      .then((res) => setContrato(res.data))
       .catch(() => router.push('/contratos'))
       .finally(() => setCarregando(false));
   }, [id]);
@@ -88,11 +89,13 @@ export default function ContratoDetalhePage() {
   if (!contrato) return null;
 
   const sc = statusContratoConfig[contrato.status] ?? statusContratoConfig['ENCERRADO'];
-  const totalDocs = documentos.length;
-  const validos = documentos.filter((d) => d.status === 'VALIDO').length;
-  const atencao = documentos.filter((d) => d.status === 'ATENCAO').length;
-  const vencidos = documentos.filter((d) => d.status === 'VENCIDO').length;
-  const semData = documentos.filter((d) => d.status === 'SEM_DATA').length;
+  const vinculos = contrato.documentos ?? [];
+  const totalDocs = vinculos.length;
+  const validos = vinculos.filter((v) => v.documento.status === 'VALIDO').length;
+  const atencao = vinculos.filter((v) => v.documento.status === 'ATENCAO').length;
+  const vencidos = vinculos.filter((v) => v.documento.status === 'VENCIDO').length;
+  const semData = vinculos.filter((v) => v.documento.status === 'SEM_DATA').length;
+  const naoSatisfazem = vinculos.filter((v) => !v.satisfaz).length;
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -158,7 +161,7 @@ export default function ContratoDetalhePage() {
       </div>
 
       {/* Resumo de documentos */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 text-center">
           <p className="text-2xl font-bold text-gray-900 dark:text-white">{totalDocs}</p>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Total</p>
@@ -175,6 +178,10 @@ export default function ContratoDetalhePage() {
           <p className="text-2xl font-bold text-red-600 dark:text-red-400">{vencidos + semData}</p>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">❌ Críticos</p>
         </div>
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-orange-200 dark:border-orange-800 p-4 text-center">
+          <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{naoSatisfazem}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">🚫 Não satisfazem</p>
+        </div>
       </div>
 
       {/* Lista de documentos */}
@@ -187,15 +194,18 @@ export default function ContratoDetalhePage() {
             onClick={() => router.push('/documentos')}
             className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition"
           >
-            + Adicionar Documento
+            Gerenciar Documentos
           </button>
         </div>
 
-        {documentos.length === 0 ? (
+        {vinculos.length === 0 ? (
           <div className="p-12 text-center">
             <p className="text-4xl mb-3">📄</p>
-            <p className="text-gray-500 dark:text-gray-400">
+            <p className="text-gray-500 dark:text-gray-400 mb-2">
               Nenhum documento vinculado a este contrato ainda.
+            </p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              Acesse um documento e use a seção "Contratos" para vinculá-lo aqui.
             </p>
           </div>
         ) : (
@@ -203,40 +213,66 @@ export default function ContratoDetalhePage() {
             <thead>
               <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
                 <th className="text-left px-5 py-3 text-gray-600 dark:text-gray-400 font-medium">Documento</th>
+                <th className="text-left px-5 py-3 text-gray-600 dark:text-gray-400 font-medium">Unidade</th>
                 <th className="text-left px-5 py-3 text-gray-600 dark:text-gray-400 font-medium">Emissão</th>
                 <th className="text-left px-5 py-3 text-gray-600 dark:text-gray-400 font-medium">Vencimento</th>
-                <th className="text-left px-5 py-3 text-gray-600 dark:text-gray-400 font-medium">Dias restantes</th>
                 <th className="text-left px-5 py-3 text-gray-600 dark:text-gray-400 font-medium">Status</th>
+                <th className="text-left px-5 py-3 text-gray-600 dark:text-gray-400 font-medium">Satisfaz</th>
               </tr>
             </thead>
             <tbody>
-              {documentos.map((doc) => {
+              {vinculos.map((vinculo) => {
+                const doc = vinculo.documento;
                 const config = statusDocConfig[doc.status] ?? statusDocConfig['SEM_DATA'];
                 return (
                   <tr
-                    key={doc.id}
+                    key={vinculo.id}
                     onClick={() => router.push(`/documentos/${doc.id}`)}
                     className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition cursor-pointer"
                   >
                     <td className="px-5 py-4">
-                      <p className="font-medium text-gray-900 dark:text-white">{doc.tipoDocumento.nome}</p>
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        {doc.tipoDocumento.nome}
+                      </p>
                       {doc.tipoDocumento.orgaoEmissor && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{doc.tipoDocumento.orgaoEmissor}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          {doc.tipoDocumento.orgaoEmissor}
+                        </p>
+                      )}
+                                            {vinculo.emissaoMaximaDias && (
+                        <p className="text-xs text-orange-500 dark:text-orange-400 mt-0.5">
+                          Emissão máx: {vinculo.emissaoMaximaDias} dias
+                        </p>
                       )}
                     </td>
-                    <td className="px-5 py-4 text-gray-700 dark:text-gray-300">{formatarData(doc.dataEmissao)}</td>
-                    <td className="px-5 py-4 text-gray-700 dark:text-gray-300">{formatarData(doc.dataVencimento)}</td>
                     <td className="px-5 py-4 text-gray-700 dark:text-gray-300">
-                      {doc.diasRestantes !== null ? (
-                        <span className={doc.diasRestantes <= 30 ? 'font-semibold text-yellow-600 dark:text-yellow-400' : ''}>
-                          {doc.diasRestantes} dias
-                        </span>
-                      ) : '—'}
+                      {doc.unidade.nome}
+                    </td>
+                    <td className="px-5 py-4 text-gray-700 dark:text-gray-300">
+                      {formatarData(doc.dataEmissao)}
+                    </td>
+                    <td className="px-5 py-4 text-gray-700 dark:text-gray-300">
+                      {formatarData(doc.dataVencimento)}
                     </td>
                     <td className="px-5 py-4">
                       <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${config.cor}`}>
                         {config.icone} {config.label}
                       </span>
+                    </td>
+                    <td className="px-5 py-4">
+                      {vinculo.emissaoMaximaDias ? (
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                          vinculo.satisfaz
+                            ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                            : 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
+                        }`}>
+                          {vinculo.satisfaz ? '✅ Sim' : '🚫 Não'}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                          Sem restrição
+                        </span>
+                      )}
                     </td>
                   </tr>
                 );

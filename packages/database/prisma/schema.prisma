@@ -82,6 +82,7 @@ model Unidade {
   usuarios     Usuario[]
   contratos    Contrato[]
   documentos   Documento[]
+  checklists   ChecklistUnidade[]
 
   @@map("unidades")
 }
@@ -126,8 +127,10 @@ model Contrato {
   unidadeId        String
   unidade          Unidade        @relation(fields: [unidadeId], references: [id])
 
-  documentos       Documento[]
+  documentos       DocumentoContrato[]
+  modelosChecklist ModeloChecklist[]
 
+  @@unique([nome, unidadeId])
   @@map("contratos")
 }
 
@@ -148,51 +151,83 @@ model TipoDocumento {
   atualizadoEm        DateTime           @updatedAt
 
   documentos          Documento[]
+  itensModelo  ItemModeloChecklist[]
 
   @@unique([nome])
   @@map("tipos_documento")
 }
 
 model Documento {
-  id                      String          @id @default(uuid())
-  dataEmissao             DateTime?
-  validadeDias            Int?
-  dataVencimento          DateTime?
-  diasRestantes           Int?
-  status                  StatusDocumento @default(SEM_DATA)
-  observacoes             String?
-  criadoEm                DateTime        @default(now())
-  atualizadoEm            DateTime        @updatedAt
+  id              String          @id @default(uuid())
+  dataEmissao     DateTime?
+  validadeDias    Int?
+  dataVencimento  DateTime?
+  diasRestantes   Int?
+  status          StatusDocumento @default(SEM_DATA)
+  observacoes     String?
+  criadoEm        DateTime        @default(now())
+  atualizadoEm    DateTime        @updatedAt
 
-  unidadeId               String
-  unidade                 Unidade         @relation(fields: [unidadeId], references: [id])
+  unidadeId       String
+  unidade         Unidade         @relation(fields: [unidadeId], references: [id])
 
-  contratoId              String?
-  contrato                Contrato?       @relation(fields: [contratoId], references: [id])
+  // contratoId removido — vínculo agora é via DocumentoContrato
+  contratos       DocumentoContrato[]
 
-  tipoDocumentoId         String
-  tipoDocumento           TipoDocumento   @relation(fields: [tipoDocumentoId], references: [id])
+  tipoDocumentoId String
+  tipoDocumento   TipoDocumento   @relation(fields: [tipoDocumentoId], references: [id])
 
-  criadoPorId             String?
-  criadoPor               Usuario?        @relation("DocumentoCriadoPor", fields: [criadoPorId], references: [id])
+  criadoPorId     String?
+  criadoPor       Usuario?        @relation("DocumentoCriadoPor", fields: [criadoPorId], references: [id])
 
-  atualizadoPorId         String?
-  atualizadoPor           Usuario?        @relation("DocumentoAtualizadoPor", fields: [atualizadoPorId], references: [id])
+  atualizadoPorId String?
+  atualizadoPor   Usuario?        @relation("DocumentoAtualizadoPor", fields: [atualizadoPorId], references: [id])
 
-  arquivos                DocumentoArquivo[]
-  alertas                 AlertaDocumento[]
+  arquivos        DocumentoArquivo[]
+  alertas         AlertaDocumento[]
+  itensChecklist ItemChecklist[]
 
   @@map("documentos")
 }
 
+// Tabela intermediária: um Documento pode estar associado
+// a vários Contratos, cada associação com suas próprias regras.
+model DocumentoContrato {
+  id                String   @id @default(uuid())
+
+  // Restrição do contratante:
+  // "Este contrato exige que o documento tenha sido emitido há no máximo X dias"
+  // Se null, não há restrição de recência além da validade normal do documento.
+  emissaoMaximaDias Int?
+
+  // Calculado pelo sistema:
+  // O documento satisfaz as exigências deste contrato?
+  satisfaz          Boolean  @default(true)
+
+  observacoes       String?
+  criadoEm          DateTime @default(now())
+  atualizadoEm      DateTime @updatedAt
+
+  documentoId       String
+  documento         Documento @relation(fields: [documentoId], references: [id])
+
+  contratoId        String
+  contrato          Contrato  @relation(fields: [contratoId], references: [id])
+
+  // Garante que o mesmo documento não seja vinculado
+  // duas vezes ao mesmo contrato
+  @@unique([documentoId, contratoId])
+  @@map("documentos_contratos")
+}
+
 model DocumentoArquivo {
-  id           String   @id @default(uuid())
+  id           String    @id @default(uuid())
   versao       Int
   arquivoUrl   String
   motivoUpload String?
   observacoes  String?
-  ativo        Boolean  @default(true)
-  criadoEm     DateTime @default(now())
+  ativo        Boolean   @default(true)
+  criadoEm     DateTime  @default(now())
 
   documentoId  String
   documento    Documento @relation(fields: [documentoId], references: [id])
@@ -204,17 +239,94 @@ model DocumentoArquivo {
 }
 
 model AlertaDocumento {
-  id           String     @id @default(uuid())
-  tipoAlerta   TipoAlerta
-  lido         Boolean    @default(false)
-  dataLeitura  DateTime?
-  criadoEm     DateTime   @default(now())
+  id             String     @id @default(uuid())
+  tipoAlerta     TipoAlerta
+  lido           Boolean    @default(false)
+  dataLeitura    DateTime?
+  criadoEm       DateTime   @default(now())
 
-  documentoId  String
-  documento    Documento  @relation(fields: [documentoId], references: [id])
+  documentoId    String
+  documento      Documento  @relation(fields: [documentoId], references: [id])
 
   destinatarioId String?
-  destinatario   Usuario? @relation(fields: [destinatarioId], references: [id])
+  destinatario   Usuario?   @relation(fields: [destinatarioId], references: [id])
 
   @@map("alertas_documentos")
+}
+// -------------------------
+// MOTOR DE CHECKLISTS
+// -------------------------
+
+model ModeloChecklist {
+  id           String   @id @default(uuid())
+  nome         String
+  descricao    String?
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  contratoId   String?
+  contrato     Contrato? @relation(fields: [contratoId], references: [id])
+
+  itens        ItemModeloChecklist[]
+  checklists   ChecklistUnidade[]
+
+  @@map("modelos_checklist")
+}
+
+model ItemModeloChecklist {
+  id              String   @id @default(uuid())
+  nomeItem        String
+  descricao       String?
+  obrigatorio     Boolean  @default(true)
+  ordem           Int      @default(0)
+  bloco           String?
+
+  modeloId        String
+  modelo          ModeloChecklist @relation(fields: [modeloId], references: [id], onDelete: Cascade)
+
+  tipoDocumentoId String?
+  tipoDocumento   TipoDocumento? @relation(fields: [tipoDocumentoId], references: [id])
+
+  itensChecklist  ItemChecklist[]
+
+  @@map("itens_modelo_checklist")
+}
+
+model ChecklistUnidade {
+  id           String   @id @default(uuid())
+  status       String   @default("EM_ANDAMENTO")
+  observacoes  String?
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  modeloId     String
+  modelo       ModeloChecklist @relation(fields: [modeloId], references: [id])
+
+  unidadeId    String
+  unidade      Unidade @relation(fields: [unidadeId], references: [id])
+
+  itens        ItemChecklist[]
+
+  @@unique([modeloId, unidadeId])
+  @@map("checklists_unidade")
+}
+
+model ItemChecklist {
+  id           String   @id @default(uuid())
+  status       String   @default("PENDENTE")
+  observacao   String?
+  dataEntrega  DateTime?
+  atualizadoEm DateTime @updatedAt
+
+  checklistUnidadeId String
+  checklistUnidade   ChecklistUnidade @relation(fields: [checklistUnidadeId], references: [id], onDelete: Cascade)
+
+  itemModeloId String
+  itemModelo   ItemModeloChecklist @relation(fields: [itemModeloId], references: [id])
+
+  documentoId  String?
+  documento    Documento? @relation(fields: [documentoId], references: [id])
+
+  @@map("itens_checklist")
 }

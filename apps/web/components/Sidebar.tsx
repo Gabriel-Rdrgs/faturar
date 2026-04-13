@@ -6,20 +6,27 @@ import { useTema } from './ThemeProvider';
 import { createClient } from '../lib/supabase';
 
 const menu = [
-    {
-      grupo: 'Geral',
-      itens: [
-        { label: 'Início', href: '/', icon: '🏠' },
-        { label: 'Unidades', href: '/unidades', icon: '🏢' },
-        { label: 'Usuários', href: '/usuarios', icon: '👥' },
-      ],
-    },
+  {
+    grupo: 'Geral',
+    itens: [
+      { label: 'Início', href: '/', icon: '🏠' },
+      { label: 'Unidades', href: '/unidades', icon: '🏢' },
+      { label: 'Usuários', href: '/usuarios', icon: '👥' },
+    ],
+  },
   {
     grupo: 'Documental',
     itens: [
       { label: 'Documentos', href: '/documentos', icon: '📄' },
       { label: 'Tipos de Documento', href: '/tipos-documento', icon: '🗂️' },
       { label: 'Contratos', href: '/contratos', icon: '📋' },
+    ],
+  },
+  {
+    grupo: 'Checklists',
+    itens: [
+      { label: 'Checklists', href: '/checklists', icon: '✅' },
+      { label: 'Modelos de Checklist', href: '/modelos-checklist', icon: '📝' },
     ],
   },
   {
@@ -56,9 +63,14 @@ export default function Sidebar() {
             </p>
             <ul className="space-y-1">
               {grupo.itens.map((item) => {
-                const ativo = pathname === item.href;
+                // Considera ativo se o pathname for exatamente o href
+                // ou se começa com o href (para subpáginas como /checklists/[id])
+                const ativo =
+                  item.href === '/'
+                    ? pathname === '/'
+                    : pathname === item.href || pathname.startsWith(item.href + '/');
                 return (
-                  <li key={item.href}>
+                  <li>
                     <Link
                       href={item.href}
                       className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition ${

@@ -36,6 +36,10 @@ export class DocumentosController {
     return this.documentosService.excluir(id);
   }
 
+  // -------------------------
+  // Arquivos
+  // -------------------------
+
   @Post(':id/arquivos')
   anexarArquivo(@Param('id') id: string, @Body() dto: AnexarArquivoDto) {
     return this.documentosService.anexarArquivo(id, dto);
@@ -47,5 +51,39 @@ export class DocumentosController {
     @Param('arquivoId') arquivoId: string,
   ) {
     return this.documentosService.excluirArquivo(id, arquivoId);
+  }
+
+  // -------------------------
+  // Vínculos com Contratos
+  // -------------------------
+
+  @Get(':id/contratos')
+  listarContratos(@Param('id') id: string) {
+    return this.documentosService.listarContratos(id);
+  }
+
+  @Post(':id/contratos')
+  vincularContrato(
+    @Param('id') documentoId: string,
+    @Body() body: {
+      contratoId: string;
+      emissaoMaximaDias?: number;
+      observacoes?: string;
+    },
+  ) {
+    return this.documentosService.vincularContrato(
+      documentoId,
+      body.contratoId,
+      body.emissaoMaximaDias,
+      body.observacoes,
+    );
+  }
+
+  @Delete(':id/contratos/:contratoId')
+  desvincularContrato(
+    @Param('id') documentoId: string,
+    @Param('contratoId') contratoId: string,
+  ) {
+    return this.documentosService.desvincularContrato(documentoId, contratoId);
   }
 }
