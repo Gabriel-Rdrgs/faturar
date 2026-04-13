@@ -4,13 +4,20 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  const corsOriginEnv = process.env.CORS_ORIGIN;
+
   const allowedOrigins = [
     'http://localhost:3000',
-    process.env.CORS_ORIGIN,
+    'https://faturar-web.vercel.app',
+    corsOriginEnv,
   ].filter(Boolean);
+
+  console.log('CORS allowed origins:', allowedOrigins);
 
   app.enableCors({
     origin: allowedOrigins,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: 'Content-Type,Authorization,X-Requested-With,Accept',
     credentials: true,
   });
 
