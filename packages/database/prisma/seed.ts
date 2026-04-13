@@ -523,6 +523,118 @@ async function main() {
   }
 
   console.log(`✅ ${docsProvidaCriados.length} documentos criados para a Provida`);
+    // -------------------------
+  // MODELOS DE CHECKLIST
+  // -------------------------
+  console.log('✅ Criando modelos de checklist...');
+
+  // Busca os tipos de documento necessários
+  const [
+    tipoContratoSocialMC,
+    tipoAtaEleicao,
+    tipoProcuracao,
+    tipoCartaoCNPJ,
+    tipoPGFNMC,
+    tipoCNDEstadual,
+    tipoCNDMunicipal,
+    tipoCNDTribMob,
+    tipoCNDTMC,
+    tipoCRFMC,
+    tipoLicencaVigilanciaMC,
+    tipoCNESMC,
+    tipoConselhoRegional,
+    tipoRespTecnicos,
+    tipoAtestadoMC,
+    tipoFalenciaMC,
+    tipoBalancoMC,
+    tipoDecIdoneiadeMC,
+    tipoDecMenorMC,
+  ] = await Promise.all([
+    prisma.tipoDocumento.findUnique({ where: { nome: 'Ato Constitutivo / Contrato Social' } }),
+    prisma.tipoDocumento.findUnique({ where: { nome: 'Ata de Eleição da Diretoria' } }),
+    prisma.tipoDocumento.findUnique({ where: { nome: 'Procuração (representante legal)' } }),
+    prisma.tipoDocumento.findUnique({ where: { nome: 'Cartão CNPJ' } }),
+    prisma.tipoDocumento.findUnique({ where: { nome: 'Certidão Conjunta PGFN/RFB' } }),
+    prisma.tipoDocumento.findUnique({ where: { nome: 'CND Estadual' } }),
+    prisma.tipoDocumento.findUnique({ where: { nome: 'CND Municipal' } }),
+    prisma.tipoDocumento.findUnique({ where: { nome: 'Certidão Negativa de Tributos Mobiliários' } }),
+    prisma.tipoDocumento.findUnique({ where: { nome: 'Certidão Negativa de Débitos Trabalhistas (CNDT)' } }),
+    prisma.tipoDocumento.findUnique({ where: { nome: 'Certificado de Regularidade do FGTS (CRF)' } }),
+    prisma.tipoDocumento.findUnique({ where: { nome: 'Licença de Funcionamento – Vigilância Sanitária' } }),
+    prisma.tipoDocumento.findUnique({ where: { nome: 'Comprovante de Credenciamento SUS (CNES)' } }),
+    prisma.tipoDocumento.findUnique({ where: { nome: 'Registro/Inscrição no Conselho Regional (CRF/CRM/CRBM)' } }),
+    prisma.tipoDocumento.findUnique({ where: { nome: 'Certidão de Registro dos Responsáveis Técnicos' } }),
+    prisma.tipoDocumento.findUnique({ where: { nome: 'Atestado de Capacidade Técnica' } }),
+    prisma.tipoDocumento.findUnique({ where: { nome: 'Certidão Negativa de Falência e Recuperação Judicial' } }),
+    prisma.tipoDocumento.findUnique({ where: { nome: 'Balanço Patrimonial' } }),
+    prisma.tipoDocumento.findUnique({ where: { nome: 'Declaração de Idoneidade' } }),
+    prisma.tipoDocumento.findUnique({ where: { nome: 'Declaração de Não Empregar Menor' } }),
+  ]);
+
+  // Cria o modelo do Edital 007/2025
+  const modeloEdital = await prisma.modeloChecklist.upsert({
+    where: { id: 'modelo-edital-007-2025' },
+    update: {},
+    create: {
+      id: 'modelo-edital-007-2025',
+      nome: 'Edital 007/2025 – Habilitação',
+      descricao: 'Documentos exigidos para credenciamento no Fundo Municipal de Saúde de Cidade Ocidental/GO',
+      ativo: true,
+    },
+  });
+
+  // Define os itens do modelo
+  const itensModelo = [
+    // Habilitação Jurídica
+    { bloco: 'Habilitação Jurídica', ordem: 1, nomeItem: 'Ato Constitutivo / Contrato Social', obrigatorio: true, tipoDocumentoId: tipoContratoSocialMC?.id ?? null, descricao: 'Com todas as alterações ou consolidado' },
+    { bloco: 'Habilitação Jurídica', ordem: 2, nomeItem: 'Ata de Eleição da Diretoria', obrigatorio: false, tipoDocumentoId: tipoAtaEleicao?.id ?? null, descricao: 'Quando aplicável' },
+    { bloco: 'Habilitação Jurídica', ordem: 3, nomeItem: 'Procuração (representante legal)', obrigatorio: false, tipoDocumentoId: tipoProcuracao?.id ?? null, descricao: 'Quando houver representante' },
+    { bloco: 'Habilitação Jurídica', ordem: 4, nomeItem: 'Cartão CNPJ', obrigatorio: true, tipoDocumentoId: tipoCartaoCNPJ?.id ?? null, descricao: null },
+    // Regularidade Fiscal
+    { bloco: 'Regularidade Fiscal', ordem: 5, nomeItem: 'Certidão Conjunta PGFN/RFB', obrigatorio: true, tipoDocumentoId: tipoPGFNMC?.id ?? null, descricao: 'Débitos federais e dívida ativa da União' },
+    { bloco: 'Regularidade Fiscal', ordem: 6, nomeItem: 'CND Estadual', obrigatorio: true, tipoDocumentoId: tipoCNDEstadual?.id ?? null, descricao: null },
+    { bloco: 'Regularidade Fiscal', ordem: 7, nomeItem: 'CND Municipal', obrigatorio: true, tipoDocumentoId: tipoCNDMunicipal?.id ?? null, descricao: null },
+    { bloco: 'Regularidade Fiscal', ordem: 8, nomeItem: 'Certidão Negativa de Tributos Mobiliários', obrigatorio: true, tipoDocumentoId: tipoCNDTribMob?.id ?? null, descricao: null },
+    // Regularidade Trabalhista
+    { bloco: 'Regularidade Trabalhista', ordem: 9, nomeItem: 'Certidão Negativa de Débitos Trabalhistas (CNDT)', obrigatorio: true, tipoDocumentoId: tipoCNDTMC?.id ?? null, descricao: null },
+    { bloco: 'Regularidade Trabalhista', ordem: 10, nomeItem: 'Certificado de Regularidade do FGTS (CRF)', obrigatorio: true, tipoDocumentoId: tipoCRFMC?.id ?? null, descricao: null },
+    // Qualificação Técnica
+    { bloco: 'Qualificação Técnica', ordem: 11, nomeItem: 'Licença de Funcionamento – Vigilância Sanitária', obrigatorio: true, tipoDocumentoId: tipoLicencaVigilanciaMC?.id ?? null, descricao: 'OBRIGATÓRIA para credenciamento SUS' },
+    { bloco: 'Qualificação Técnica', ordem: 12, nomeItem: 'Comprovante de Credenciamento SUS (CNES)', obrigatorio: true, tipoDocumentoId: tipoCNESMC?.id ?? null, descricao: 'CONDIÇÃO BÁSICA DE PARTICIPAÇÃO' },
+    { bloco: 'Qualificação Técnica', ordem: 13, nomeItem: 'Registro/Inscrição no Conselho Regional', obrigatorio: true, tipoDocumentoId: tipoConselhoRegional?.id ?? null, descricao: 'CRF/CRM/CRBM conforme atividade' },
+    { bloco: 'Qualificação Técnica', ordem: 14, nomeItem: 'Certidão de Registro dos Responsáveis Técnicos', obrigatorio: true, tipoDocumentoId: tipoRespTecnicos?.id ?? null, descricao: 'Por profissional responsável técnico' },
+    { bloco: 'Qualificação Técnica', ordem: 15, nomeItem: 'Atestado de Capacidade Técnica', obrigatorio: true, tipoDocumentoId: tipoAtestadoMC?.id ?? null, descricao: 'Deve comprovar atividade compatível com o objeto do edital' },
+    // Qualificação Econômica
+    { bloco: 'Qualificação Econômica', ordem: 16, nomeItem: 'Certidão Negativa de Falência e Recuperação Judicial', obrigatorio: true, tipoDocumentoId: tipoFalenciaMC?.id ?? null, descricao: null },
+    { bloco: 'Qualificação Econômica', ordem: 17, nomeItem: 'Balanço Patrimonial', obrigatorio: true, tipoDocumentoId: tipoBalancoMC?.id ?? null, descricao: 'Último exercício. LG, LC e SG ≥ 1,0' },
+    // Declarações
+    { bloco: 'Declarações', ordem: 18, nomeItem: 'Declaração de Idoneidade', obrigatorio: true, tipoDocumentoId: tipoDecIdoneiadeMC?.id ?? null, descricao: null },
+    { bloco: 'Declarações', ordem: 19, nomeItem: 'Declaração de Não Empregar Menor', obrigatorio: true, tipoDocumentoId: tipoDecMenorMC?.id ?? null, descricao: 'Art. 7º, XXXIII da CF/88' },
+  ];
+
+  // Cria os itens apenas se ainda não existirem para este modelo
+  const itensExistentes = await prisma.itemModeloChecklist.count({
+    where: { modeloId: modeloEdital.id },
+  });
+
+  if (itensExistentes === 0) {
+    for (const item of itensModelo) {
+      await prisma.itemModeloChecklist.create({
+        data: {
+          modeloId: modeloEdital.id,
+          nomeItem: item.nomeItem,
+          descricao: item.descricao,
+          bloco: item.bloco,
+          obrigatorio: item.obrigatorio,
+          ordem: item.ordem,
+          tipoDocumentoId: item.tipoDocumentoId,
+        },
+      });
+    }
+    console.log(`✅ ${itensModelo.length} itens criados para o modelo do Edital 007/2025`);
+  } else {
+    console.log(`ℹ️ Modelo do Edital 007/2025 já possui itens — pulando`);
+  }
   console.log('🎉 Seed concluído com sucesso!');
 }
 

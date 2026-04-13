@@ -3,12 +3,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CriarDocumentoDto } from './dto/criar-documento.dto';
 import { AnexarArquivoDto } from './dto/anexar-arquivo.dto';
 import { AlertasDocumentoService } from '../alertas-documento/alertas-documento.service';
+import { ChecklistsUnidadeService } from '../checklists-unidade/checklists-unidade.service';
 
 @Injectable()
 export class DocumentosService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly alertas: AlertasDocumentoService,
+    private readonly checklists: ChecklistsUnidadeService,
   ) {}
 
   private calcularStatus(dataVencimento: Date | null, limiteAtencaoDias = 30): string {
@@ -28,7 +30,6 @@ export class DocumentosService {
     return vencimento;
   }
 
-  // Recalcula se um DocumentoContrato satisfaz as exigências do contrato
   private calcularSatisfaz(
     dataEmissao: Date | null,
     emissaoMaximaDias: number | null,
@@ -46,7 +47,6 @@ export class DocumentosService {
     return this.prisma.documento.findMany({
       where: {
         ...(unidadeId && { unidadeId }),
-        // Filtro por contrato agora usa a relação N:N
         ...(contratoId && {
           contratos: { some: { contratoId } },
         }),
@@ -54,7 +54,6 @@ export class DocumentosService {
       },
       include: {
         unidade: { select: { id: true, nome: true } },
-        // Retorna os contratos vinculados com dados básicos
         contratos: {
           include: {
             contrato: { select: { id: true, nome: true } },
@@ -102,8 +101,6 @@ export class DocumentosService {
         )
       : null;
 
-    // Extrai contratoId do dto se vier (para manter compatibilidade com o frontend atual)
-    // mas não passa para o Prisma, pois o campo não existe mais no modelo Documento
     const { contratoId, ...dadosDocumento } = dto as any;
 
     const documento = await this.prisma.documento.create({
@@ -117,7 +114,6 @@ export class DocumentosService {
       },
     });
 
-    // Se veio contratoId no dto, já vincula automaticamente
     if (contratoId) {
       await this.prisma.documentoContrato.create({
         data: {
@@ -129,6 +125,8 @@ export class DocumentosService {
     }
 
     await this.alertas.verificarDocumento(documento.id);
+    // Atualiza checklists vinculados a este tipo de documento
+    await this.checklists.atualizarItensPorDocumento(documento.id);
     return documento;
   }
 
@@ -163,7 +161,6 @@ export class DocumentosService {
         )
       : null;
 
-    // Remove contratoId do dto para não passar ao Prisma
     const { contratoId, ...dadosDocumento } = dto as any;
 
     const documentoAtualizado = await this.prisma.documento.update({
@@ -178,20 +175,18 @@ export class DocumentosService {
       },
     });
 
-    // Recalcula satisfaz em todos os vínculos deste documento
     await this.recalcularSatisfazPorDocumento(id, dataEmissaoDate);
-
     await this.alertas.verificarDocumento(id);
+    // Atualiza checklists vinculados a este documento
+    await this.checklists.atualizarItensPorDocumento(id);
     return documentoAtualizado;
   }
 
   async excluir(id: string) {
-    // Remove vínculos antes de excluir o documento
     await this.prisma.documentoContrato.deleteMany({ where: { documentoId: id } });
     return this.prisma.documento.delete({ where: { id } });
   }
 
-  // Vincula um documento a um contrato
   async vincularContrato(
     documentoId: string,
     contratoId: string,
@@ -232,7 +227,6 @@ export class DocumentosService {
     });
   }
 
-  // Desvincula um documento de um contrato
   async desvincularContrato(documentoId: string, contratoId: string) {
     const vinculo = await this.prisma.documentoContrato.findUnique({
       where: { documentoId_contratoId: { documentoId, contratoId } },
@@ -244,7 +238,6 @@ export class DocumentosService {
     });
   }
 
-  // Lista contratos vinculados a um documento
   async listarContratos(documentoId: string) {
     return this.prisma.documentoContrato.findMany({
       where: { documentoId },
@@ -257,7 +250,6 @@ export class DocumentosService {
     });
   }
 
-  // Recalcula o campo satisfaz de todos os vínculos de um documento
   private async recalcularSatisfazPorDocumento(
     documentoId: string,
     dataEmissao: Date | null,
@@ -341,9 +333,10 @@ export class DocumentosService {
       },
     });
 
-    // Recalcula satisfaz nos vínculos após novo arquivo
     await this.recalcularSatisfazPorDocumento(documentoId, dataEmissaoDate);
     await this.alertas.verificarDocumento(documentoId);
+    // Atualiza checklists vinculados a este documento
+    await this.checklists.atualizarItensPorDocumento(documentoId);
 
     return documentoFinal;
   }
@@ -357,7 +350,7 @@ export class DocumentosService {
     if (arquivo.documentoId !== documentoId)
       throw new BadRequestException('Arquivo não pertence a este documento');
 
-        await this.prisma.documentoArquivo.delete({ where: { id: arquivoId } });
+    await this.prisma.documentoArquivo.delete({ where: { id: arquivoId } });
 
     if (arquivo.ativo) {
       const maisRecente = await this.prisma.documentoArquivo.findFirst({

@@ -70,7 +70,7 @@ export default function Sidebar() {
                     ? pathname === '/'
                     : pathname === item.href || pathname.startsWith(item.href + '/');
                 return (
-                  <li>
+                  <li key={item.href}>
                     <Link
                       href={item.href}
                       className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition ${
