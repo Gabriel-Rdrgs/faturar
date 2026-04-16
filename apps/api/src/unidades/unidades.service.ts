@@ -93,4 +93,67 @@ export class UnidadesService {
 
     return this.prisma.unidade.delete({ where: { id } });
   }
+    async getDocumentosResumo(unidadeId: string) {
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+
+      const em30dias = new Date(hoje);
+      em30dias.setDate(hoje.getDate() + 30);
+
+      const documentos = await this.prisma.documento.findMany({
+        where: {
+          unidadeId, // vínculo direto — correto conforme o schema
+        },
+        select: {
+          id: true,
+          status: true,
+          dataVencimento: true,
+          arquivos: {
+            where: { ativo: true },
+            select: { id: true },
+            take: 1,
+          },
+        },
+      });
+
+      const total = documentos.length;
+
+      const vencidos = documentos.filter(
+        (d) =>
+          d.status === 'VENCIDO' ||
+          (d.dataVencimento && new Date(d.dataVencimento) < hoje),
+      ).length;
+
+      const aVencer = documentos.filter(
+        (d) =>
+          d.dataVencimento &&
+          new Date(d.dataVencimento) >= hoje &&
+          new Date(d.dataVencimento) <= em30dias &&
+          d.status !== 'VENCIDO',
+      ).length;
+
+      const semArquivo = documentos.filter(
+        (d) => d.arquivos.length === 0,
+      ).length;
+
+      const emDia = documentos.filter(
+        (d) =>
+          d.status === 'VALIDO' &&
+          d.arquivos.length > 0 &&
+          (!d.dataVencimento || new Date(d.dataVencimento) > em30dias),
+      ).length;
+
+      const percentualEmDia =
+        total > 0 ? Math.round((emDia / total) * 100) : 0;
+
+      return {
+        unidadeId,
+        total,
+        vencidos,
+        aVencer,
+        semArquivo,
+        emDia,
+        percentualEmDia,
+      };
+    }
 }

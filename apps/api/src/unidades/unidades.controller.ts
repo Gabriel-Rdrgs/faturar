@@ -30,4 +30,8 @@ export class UnidadesController {
   excluir(@Param('id') id: string) {
     return this.unidadesService.excluir(id);
   }
+  @Get(':id/documentos-resumo')
+  async getDocumentosResumo(@Param('id') id: string) {
+    return this.unidadesService.getDocumentosResumo(id);
+  }
 }

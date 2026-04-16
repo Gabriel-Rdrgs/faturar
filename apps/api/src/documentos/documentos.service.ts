@@ -60,6 +60,12 @@ export class DocumentosService {
           },
         },
         tipoDocumento: true,
+        arquivos: {
+          where: { ativo: true },
+          orderBy: { versao: 'desc' },
+          take: 1,
+          select: { id: true },
+        },
       },
       orderBy: { dataVencimento: 'asc' },
     });
